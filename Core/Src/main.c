@@ -57,16 +57,16 @@ uint16_t ADCin = 0;
 uint64_t _micro = 0;
 float dataOut = 0;
 float step=0;
-uint64_t ts_square=0;uint64_t ts_saw=0;
-float fq=1;float period =0;float m=0;float high=3.3;float low=0;
-uint8_t DACConfig = 0b0011;
-float y=0;
+uint64_t ts_square=0;uint64_t ts_saw=0;float high_saw=3.3;float low_saw=0;
+float fq=1;float period =0;float m=0;float high=3.3;float low=0;float fq_saw=1;
+uint8_t DACConfig = 0b0011;float high_sin=3.3;float low_sin=0;float fq_sin=1;
+float y=0;float fq_sq=1;float high_sq=3.3;float low_sq=0;
 float x=0;
 float dutycycle=0;float t_on=0;float t_off=0;
 char TxDataBuffer[32] ={ 0 };
 char RxDataBuffer[32] ={ 0 };
-uint16_t state=0;
-enum{start=0,on,off,on_saw,off_saw};
+uint16_t state=0;uint16_t statesaw=0;uint16_t statesin=0;uint16_t statesq=0;
+enum{start=0,menu,waitmenu,on,off,square_menu,waitsquare,saw_menu,waitsaw,sin_menu,waitsin,X1,slopeup,slopedown,sine,square};
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -81,7 +81,7 @@ static void MX_TIM11_Init(void);
 /* USER CODE BEGIN PFP */
 void MCP4922SetOutput(uint8_t Config, uint16_t DACOutput);
 uint64_t micros();
-
+int16_t UARTRecieveIT();
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -129,6 +129,7 @@ int main(void)
 	HAL_ADC_Start_DMA(&hadc1, (uint32_t*) &ADCin, 1);
 
 	HAL_GPIO_WritePin(LOAD_GPIO_Port, LOAD_Pin, GPIO_PIN_RESET);
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -184,7 +185,189 @@ int main(void)
 //            if(dataOut<=low){dataOut=high;x=0;}
 //            else{dataOut=high+(m*x);}
 //		    }
+			HAL_UART_Receive_IT(&huart2,  (uint8_t*)RxDataBuffer, 32);
+			int16_t inputchar = UARTRecieveIT();
 
+			switch(state)
+			{case start :
+			  state = menu;
+			break;
+			case menu:
+			  sprintf(TxDataBuffer,"\r\n WAVE select \r\n 0=sawtooth ");
+			  HAL_UART_Transmit(&huart2, (uint8_t*)TxDataBuffer, strlen(TxDataBuffer), 1000);
+			  sprintf(TxDataBuffer,"\r\n 1=sine wave \r\n 2=square wave");
+			  HAL_UART_Transmit(&huart2, (uint8_t*)TxDataBuffer, strlen(TxDataBuffer), 1000);
+			  state = waitmenu;
+			 break;
+			case waitmenu:
+				if(inputchar!=-1)
+				{if(inputchar=='0')
+				{state = saw_menu;}
+				else if(inputchar=='1')
+				 {state = sin_menu;}
+				else if(inputchar=='2')
+				 {state = square_menu;}
+				else if (inputchar!='0'|inputchar!='1'|inputchar!='2' )
+				{state =X1;}
+				}
+			break;
+			case X1:
+				sprintf(TxDataBuffer,"\r\n error\r\n");
+				HAL_UART_Transmit(&huart2, (uint8_t*)TxDataBuffer, strlen(TxDataBuffer), 1000);
+				state=waitmenu;
+			break;
+			case saw_menu:
+				sprintf(TxDataBuffer,"\r\n SAWTOOTH \r\n ");HAL_UART_Transmit(&huart2, (uint8_t*)TxDataBuffer, strlen(TxDataBuffer), 1000);
+				sprintf(TxDataBuffer,"\r\n a=+0.1hz\r\n s=-0.1hz");HAL_UART_Transmit(&huart2, (uint8_t*)TxDataBuffer, strlen(TxDataBuffer), 1000);
+				sprintf(TxDataBuffer,"\r\n d=+0.1V high \r\n f=-0.1V high \r\n");HAL_UART_Transmit(&huart2, (uint8_t*)TxDataBuffer, strlen(TxDataBuffer), 1000);
+				sprintf(TxDataBuffer,"\r\n q=+0.1V low \r\n w=-0.1V low \r\n");HAL_UART_Transmit(&huart2, (uint8_t*)TxDataBuffer, strlen(TxDataBuffer), 1000);
+				sprintf(TxDataBuffer,"\r\n e=slope up \r\n r=slope down \r\n");HAL_UART_Transmit(&huart2, (uint8_t*)TxDataBuffer, strlen(TxDataBuffer), 1000);
+				sprintf(TxDataBuffer,"\r\n x=back \r\n ");HAL_UART_Transmit(&huart2, (uint8_t*)TxDataBuffp  er, strlen(TxDataBuffer), 1000);
+				state=waitsaw;
+			break;
+			case waitsaw:
+				if(inputchar!=-1)
+				{if(inputchar=='a')
+				 {fq_saw+=0.1;}
+				else if(inputchar=='s')
+				 {fq_saw-=0.1;}
+				else if(inputchar=='d')
+				 {high_saw+=0.1;}
+				else if (inputchar=='f')
+				{high_saw-=0.1;}
+				else if(inputchar=='q')
+			    {low_saw+=0.1;}
+				else if(inputchar=='w')
+				{low_saw-=0.1;}
+				else if(inputchar=='e')
+				{statesaw=slopeup;}
+				else if(inputchar=='r')
+				{statesaw=slopedown;}
+				else if(inputchar=='x')
+				{state=menu;}
+				}
+			break;
+			case sin_menu:
+				sprintf(TxDataBuffer,"\r\n SINE WAVE \r\n ");
+				HAL_UART_Transmit(&huart2, (uint8_t*)TxDataBuffer, strlen(TxDataBuffer), 1000);
+				sprintf(TxDataBuffer,"\r\n a=+0.1hz\r\n s=-0.1hz");HAL_UART_Transmit(&huart2, (uint8_t*)TxDataBuffer, strlen(TxDataBuffer), 1000);
+				sprintf(TxDataBuffer,"\r\n d=+0.1V high \r\n f=-0.1V high \r\n");HAL_UART_Transmit(&huart2, (uint8_t*)TxDataBuffer, strlen(TxDataBuffer), 1000);
+				sprintf(TxDataBuffer,"\r\n q=+0.1V low \r\n w=-0.1V low \r\n");HAL_UART_Transmit(&huart2, (uint8_t*)TxDataBuffer, strlen(TxDataBuffer), 1000);
+				sprintf(TxDataBuffer,"\r\n x=back \r\n e=run \r\n");HAL_UART_Transmit(&huart2, (uint8_t*)TxDataBuffer, strlen(TxDataBuffer), 1000);
+				state=waitsin;
+
+			break;
+			case waitsin:
+				if(inputchar!=-1)
+				{if(inputchar=='a')
+				 {fq_sin+=0.1;}
+				else if(inputchar=='s')
+				 {fq_sin-=0.1;}
+				else if(inputchar=='d')
+				 {high_sin+=0.1;}
+				else if (inputchar=='f')
+				{high_sin-=0.1;}
+				else if(inputchar=='q')
+				{low_sin+=0.1;}
+				else if(inputchar=='w')
+				{low_sin-=0.1;}
+				else if(inputchar=='x')
+				{state=menu;}
+				else if(inputchar=='e')
+				{statesin=sine;}
+				}
+			break;
+			case square_menu:
+				sprintf(TxDataBuffer,"\r\n SQUARE WAVE \r\n ");
+				HAL_UART_Transmit(&huart2, (uint8_t*)TxDataBuffer, strlen(TxDataBuffer), 1000);
+				sprintf(TxDataBuffer,"\r\n a=+0.1hz\r\n s=-0.1hz");HAL_UART_Transmit(&huart2, (uint8_t*)TxDataBuffer, strlen(TxDataBuffer), 1000);
+				sprintf(TxDataBuffer,"\r\n d=+0.1V high \r\n f=-0.1V high \r\n");HAL_UART_Transmit(&huart2, (uint8_t*)TxDataBuffer, strlen(TxDataBuffer), 1000);
+				sprintf(TxDataBuffer,"\r\n q=+0.1V low \r\n w=-0.1V low \r\n");HAL_UART_Transmit(&huart2, (uint8_t*)TxDataBuffer, strlen(TxDataBuffer), 1000);
+				sprintf(TxDataBuffer,"\r\n x=back \r\n e=run \r\n");HAL_UART_Transmit(&huart2, (uint8_t*)TxDataBuffer, strlen(TxDataBuffer), 1000);
+				sprintf(TxDataBuffer,"\r\n t=+1% dutycycle \r\n y=-1% dutycycle \r\n");HAL_UART_Transmit(&huart2, (uint8_t*)TxDataBuffer, strlen(TxDataBuffer), 1000);
+				state=waitsquare;
+
+			break;
+			case waitsquare:
+				if(inputchar!=-1)
+				{if(inputchar=='a')
+				 {fq_sq+=0.1;}
+				else if(inputchar=='s')
+				 {fq_sq-=0.1;}
+				else if(inputchar=='d')
+				 {high_sq+=0.1;}
+				else if (inputchar=='f')
+				{high_sq-=0.1;}
+				else if(inputchar=='q')
+				{low_sq+=0.1;}
+				else if(inputchar=='w')
+				{low_sq-=0.1;}
+				else if(inputchar=='t')
+			    {dutycycle+=1;}
+				else if(inputchar=='y')
+				{dutycycle-=1;}
+				else if(inputchar=='x')
+				{state=menu;}
+				else if(inputchar=='e')
+				{statesq=square;}
+				}
+			break;
+			}
+			switch(statesaw)
+			{case slopeup:
+				if (micros() - timestamp > 100)
+				{timestamp = micros();
+				period = 1/fq_saw;                    //sawtooth
+				x+=0.0001;
+				m=(high_saw-low_saw)/period;
+				if(m*x<=high_saw)
+				{dataOut=m*x;}
+				else{dataOut=low_saw;x=0;}
+				}
+		     break;
+			case slopedown:
+				if (micros() - timestamp > 100)
+					{timestamp = micros();
+					period=1/fq_saw; 							//invese sawtooth
+					x+=0.0001;
+					m=-1*(high_saw-low_saw)/period;
+					if(dataOut<=low_saw){dataOut=high_saw;x=0;}
+					else{dataOut=high_saw+(m*x);}
+					}
+			 break;
+			}
+
+			switch(statesin)
+			{case sine:
+				if (micros() - timestamp > 100)
+				{timestamp = micros();
+				x+=0.0001;
+				dataOut =  (((high_sin+low_sin)/2)*(sin(2*3.141592*fq*x)))+((high_sin+low_sin)/2);  //sin wave +shift 3.3/0
+				}
+			break;
+			}
+
+
+			switch(statesq)
+			{case square:
+			period = 1/fq;
+			t_off = dutycycle*period/100;
+			t_on = period-t_off;
+			statesq=on;
+			break;
+			case on:
+				if(micros()-ts_square>=t_on*1000000)
+				{ dataOut=3.3;
+				ts_square=micros();
+				statesq = off;}
+			break;
+			case off:
+				if(micros()-ts_square>=t_off*1000000)
+				{   ts_square=micros();
+					dataOut=0;
+					statesq = on;}
+			break;
+			}
 
 
 			if (hspi3.State == HAL_SPI_STATE_READY&& HAL_GPIO_ReadPin(SPI_SS_GPIO_Port, SPI_SS_Pin)== GPIO_PIN_SET)
@@ -543,6 +726,18 @@ void MCP4922SetOutput(uint8_t Config, uint16_t DACOutput)
 	HAL_GPIO_WritePin(SPI_SS_GPIO_Port, SPI_SS_Pin, GPIO_PIN_RESET);
 	HAL_SPI_Transmit_IT(&hspi3, &OutputPacket, 1);
 }
+int16_t UARTRecieveIT()
+{
+	static uint32_t dataPos =0;
+	int16_t data=-1;
+
+	if(huart2.RxXferSize - huart2.RxXferCount!=dataPos)
+	{
+		data=RxDataBuffer[dataPos];
+		dataPos= (dataPos+1)%huart2.RxXferSize;
+	}
+	return data;
+}
 
 void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi)
 {
@@ -558,6 +753,11 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 	{
 		_micro += 65535;
 	}
+}
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+	sprintf(TxDataBuffer, "Received:[%s]\r\n", RxDataBuffer);
+	//HAL_UART_Transmit(&huart2, (uint8_t*)TxDataBuffer, strlen(TxDataBuffer), 1000);
 }
 
 inline uint64_t micros()
