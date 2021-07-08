@@ -240,9 +240,9 @@ int main(void)
 				else if(inputchar=='w')
 				{low_saw-=0.1;sprintf(TxDataBuffer,"\r\n Vlow = [%f]\r\n",low_saw);HAL_UART_Transmit(&huart2, (uint8_t*)TxDataBuffer, strlen(TxDataBuffer), 1000);}
 				else if(inputchar=='e')
-				{statesaw=slopeup;}
+				{   statesin=0;statesq=0;statesaw=slopeup;}
 				else if(inputchar=='r')
-				{statesaw=slopedown;}
+				{statesin=0;statesq=0;statesaw=slopedown;}
 				else if(inputchar=='x')
 				{state=menu;}
 				}
@@ -272,7 +272,8 @@ int main(void)
 				else if(inputchar=='w')
 				{low_sin-=0.1;sprintf(TxDataBuffer,"\r\n Vlow = [%f]\r\n",low_sin);HAL_UART_Transmit(&huart2, (uint8_t*)TxDataBuffer, strlen(TxDataBuffer), 1000);}
 				else if(inputchar=='e')
-				{statesin=sine;}
+				{statesq=0;statesaw=0;
+					statesin=sine;}
 				else if(inputchar=='x')
 				{state=menu;}
 				}
@@ -311,7 +312,8 @@ int main(void)
 				else if(inputchar=='x')
 				{state=menu;}
 				else if(inputchar=='e')
-				{statesq=square;}
+				{statesin=0;statesaw=0;
+					statesq=square;}
 				}
 			break;
 			}
